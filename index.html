@@ -23,7 +23,7 @@
             color: var(--text);
             font-family: system-ui, -apple-system, sans-serif;
             line-height: 1.4;
-            padding: 10px;
+            padding: 15px;
         }
 
         header {
@@ -37,7 +37,8 @@
         h1 { font-size: 1.2rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text); }
         
         .status-container { display: flex; align-items: center; margin-top: 5px; font-size: 0.85rem; }
-        .status-dot { width: 10px; height: 10px; background-color: var(--action-green); border-radius: 50%; margin-right: 8px; }
+        .status-dot { width: 10px; height: 10px; background-color: #64748b; border-radius: 50%; margin-right: 8px; }
+        .status-dot.connected { background-color: var(--action-green); }
 
         .section-box {
             background-color: var(--panel);
@@ -91,17 +92,11 @@
         }
         .btn-publish:active { background-color: #b91c1c; }
 
-        /* The Infinite-Scroll Workspace Fix */
-        .workspace-wrapper {
-            width: 100%;
-        }
-
-        /* Textarea now resizes to display its entire content natively */
         textarea.dynamic-editor {
             height: auto;
-            min-height: 400px;
+            min-height: 300px;
             resize: none;
-            overflow-y: hidden; /* Disables internal scroll completely */
+            overflow-y: hidden;
             white-space: pre;
             overflow-x: auto;
         }
@@ -122,61 +117,46 @@
     <header>
         <h1>File Editor Terminal</h1>
         <div class="status-container">
-            <div class="status-dot"></div>
-            <span>CONNECTION STATUS: CONNECTED</span>
+            <div id="statusDot" class="status-dot"></div>
+            <span id="statusText">CONNECTION STATUS: DISCONNECTED</span>
         </div>
     </header>
 
-    <div class="section-box">
+    <div id="setupPanel" class="section-box">
+        <div class="section-title">Connection Configuration</div>
+        <input type="password" id="ghToken" placeholder="Enter GitHub Personal Access Token...">
+        <input type="text" id="ghUser" placeholder="Enter GitHub Username...">
+        <input type="text" id="ghRepo" placeholder="Enter Target Repository Name...">
+        <button onclick="connectToRepository()">Connect Engine</button>
+    </div>
+
+    <div id="workPanel" class="section-box" style="display:none;">
         <div class="section-title">Choose File to Open</div>
         <select id="fileSelector" onchange="loadFileContent()">
-            </select>
+            <option value="">-- Select a File --</option>
+        </select>
     </div>
 
-    <div class="section-box">
-        <div class="section-title">Sniper Search™</div>
-        <input type="text" id="sniperInput" placeholder="Enter target string or variable...">
-        <button onclick="runSniperSearch()">Find</button>
-    </div>
-
-    <div class="section-box">
+    <div id="notePanel" class="section-box" style="display:none;">
         <div class="section-title">Save Note (Commit Message)</div>
-        <input type="text" id="commitMessage" value="Updates via Mobile Console Engine v2">
+        <input type="text" id="commitMessage" value="Updates via Mobile Console v2">
     </div>
 
-    <div class="section-box workspace-wrapper">
+    <div id="editorPanel" class="section-box" style="display:none;">
         <div class="section-title">Live Code Workspace</div>
-        <textarea id="mainEditor" class="dynamic-editor" placeholder="[ File Loaded & Waiting ]" oninput="autoExpand(this)"></textarea>
-        
+        <textarea id="mainEditor" class="dynamic-editor" placeholder="[ Standing By ]" oninput="autoExpand(this)"></textarea>
         <button class="btn-publish" onclick="publishChanges()">Publish All Changes Live to GitHub</button>
     </div>
 
     <div class="section-box">
         <div class="section-title">System Activity Log</div>
-        <div id="systemLog" class="log-box">Console pipeline standing by...</div>
+        <div id="systemLog" class="log-box">Console standing by. Enter credentials above to link.</div>
     </div>
 
     <script>
-        // Core API Configuration Storage
-        let config = { token: '', user: '', repo: '', branch: '' };
+        let config = { token: '', user: '', repo: '', branch: 'main' };
         let currentFileSha = '';
 
-        // Auto-load credentials from the active session string if present
-        window.addEventListener('DOMContentLoaded', () => {
-            const params = new URLSearchParams(window.location.search);
-            config.token = params.get('t') || localStorage.getItem('inkwell_token');
-            config.user = params.get('u') || localStorage.getItem('inkwell_user');
-            config.repo = params.get('r') || localStorage.getItem('inkwell_repo');
-            config.branch = params.get('b') || 'main';
-
-            if(config.token && config.repo) {
-                fetchRepositoryFiles();
-            } else {
-                updateLog("Initialization failed. Missing connection variables.");
-            }
-        });
-
-        // The Engine that auto-expands the window dynamically
         function autoExpand(textarea) {
             textarea.style.height = 'auto';
             textarea.style.height = textarea.scrollHeight + 'px';
@@ -186,17 +166,28 @@
             document.getElementById('systemLog').innerText = msg;
         }
 
-        async function fetchRepositoryFiles() {
+        async function connectToRepository() {
+            config.token = document.getElementById('ghToken').value;
+            config.user = document.getElementById('ghUser').value;
+            config.repo = document.getElementById('ghRepo').value;
+
+            if(!config.token || !config.user || !config.repo) {
+                return updateLog("Error: All configuration fields must be filled.");
+            }
+
             updateLog("Scanning remote vault tree...");
             const url = `https://api.github.com/repos/${config.user}/${config.repo}/git/trees/${config.branch}?recursive=1`;
+            
             try {
                 const response = await fetch(url, {
                     headers: { 'Authorization': `token ${config.token}`, 'Accept': 'application/vnd.github.v3+json' }
                 });
-                const data = await response.json();
-                if(data.tree) {
+                
+                if(response.ok) {
+                    const data = await response.json();
                     const selector = document.getElementById('fileSelector');
                     selector.innerHTML = '<option value="">-- Choose Target Repo File --</option>';
+                    
                     data.tree.forEach(file => {
                         if(file.type === 'blob') {
                             const opt = document.createElement('option');
@@ -205,12 +196,21 @@
                             selector.appendChild(opt);
                         }
                     });
+
+                    document.getElementById('statusDot').className = "status-dot connected";
+                    document.getElementById('statusText').innerText = `CONNECTED TO: ${config.repo}`;
+                    
+                    document.getElementById('setupPanel').style.display = 'none';
+                    document.getElementById('workPanel').style.display = 'block';
+                    document.getElementById('notePanel').style.display = 'block';
+                    document.getElementById('editorPanel').style.display = 'block';
+                    
                     updateLog("Repository architecture successfully cataloged.");
                 } else {
-                    updateLog("Error reading tree structure.");
+                    updateLog("Connection rejected. Check your token or repo name.");
                 }
             } catch (err) {
-                updateLog("Connection sequence interrupted.");
+                updateLog("Network connection sequence failed.");
             }
         }
 
@@ -230,27 +230,9 @@
                 const editor = document.getElementById('mainEditor');
                 editor.value = decodedContent;
                 updateLog(`File locked into memory buffer.`);
-                
-                // Fire the auto-expand rule immediately on load
                 autoExpand(editor);
             } catch (err) {
                 updateLog("Failed to process file decoding.");
-            }
-        }
-
-        function runSniperSearch() {
-            const searchTerm = document.getElementById('sniperInput').value;
-            const editor = document.getElementById('mainEditor');
-            if(!searchTerm || !editor.value) return;
-
-            const index = editor.value.indexOf(searchTerm);
-            if(index !== -1) {
-                editor.focus();
-                editor.setSelectionRange(index, index + searchTerm.length);
-                const lineBreakCount = editor.value.substring(0, index).split('\n').length;
-                updateLog(`Target located on text sequence sequence line ${lineBreakCount}.`);
-            } else {
-                updateLog("Target string not found in file architecture.");
             }
         }
 
