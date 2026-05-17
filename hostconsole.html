@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Inkwell OS // Command Console</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  
+  <style>
+    /* HIGH-CONTRAST MOBILE OPTIMIZED DARK STYLE MATRIX */
+    :root {
+      --bg: #090d16;
+      --panel: #0d1527;
+      --border: #334155;          
+      --input-border: #475569;    
+      --input-focus: #f87171;     
+      --crimson: #991b1b;
+      --crimson-hover: #7f1d1d;
+      --gold: #d97706;            
+      --text: #f3f4f6;            
+      --text-muted: #cbd5e1;
+      --action-green: #22c55e;
+      --action-red: #dc2626;      
+      --section-blue: #38bdf8;
+      --tag-accent-blue: #38bdf8;
+      --matrix-glow: #00ff41;
+      --matrix-bg: #050805;
+      --matrix-border: #008f11;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.4;
+      -webkit-text-size-adjust: 100%;
+    }
+
+    header {
+      background-color: var(--panel);
+      border-bottom: 2px solid var(--border);
+      padding: 1rem;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
+      transition: opacity 0.25s ease;
+    }
+    header.dimmed-safety { opacity: 0.35; pointer-events: none; }
+
+    .brand-sub { font-size: 9px; font-weight: 800; letter-spacing: 0.3em; color: var(--gold); text-transform: uppercase; }
+    .brand-title { font-size: 1.2rem; font-weight: 800; color: #ffffff; margin-top: 0.25rem; letter-spacing: -0.02em; }
+    
+    nav {
+      display: flex;
+      gap: 0.4rem;
+      background-color: rgba(9, 13, 22, 0.8);
+      padding: 0.3rem;
+      border: 2px solid var(--border);
+      border-radius: 4px;
+      margin-top: 1rem;
+    }
+    nav button {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      padding: 0.5rem 0.4rem;
+      font-size: 9px;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-radius: 2px;
+      cursor: pointer;
+    }
+    nav button.active {
+      background-color: var(--crimson);
+      color: #ffffff;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.2);
+    }
+
+    main { 
+      flex: 1; 
+      padding: 1rem; 
+      width: 100%; 
+    }
+    .workspace-panel { display: flex; flex-direction: column; gap: 1.25rem; }
+    .hidden { display: none !important; }
+
+    section {
+      background-color: var(--panel);
+      border: 2px solid var(--border);
+      padding: 1.25rem 1rem;
+      border-radius: 4px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+      transition: opacity 0.25s ease;
+    }
+    section.dimmed-safety { opacity: 0.35; pointer-events: none; }
+    
+    h2 { font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--section-blue); border-bottom: 2px solid var(--border); padding-bottom: 0.5rem; margin-bottom: 1rem; }
+    label { display: block; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.4rem; }
+    
+    input[type="text"], input[type="password"], textarea, select {
+      width: 100%;
+      height: 38px;
+      padding: 0.55rem 0.7rem;
+      background-color: #050810;     
+      border: 2px solid var(--input-border);
+      border-radius: 4px;
+      color: #ffffff;                
+      font-size: 13px;               
+      font-weight: 500;
+    }
+    input:focus, textarea:focus, select:focus { 
+      outline: none; 
+      border-color: var(--input-focus);         
+      background-color: #0c1322; 
+    }
+
+    /* ARCHITECTURAL RECONSTRUCTION: Layout boundaries built for mobile viewport stability */
+    .editor-canvas-container {
+      position: relative;
+      background-color: #04070d;
+      margin-left: -1rem;
+      margin-right: -1rem;
+      border: 2px solid var(--border);
+      border-radius: 0 0 4px 4px;
+      overflow: hidden;
+      display: block;
+      clear: both;
+    }
+
+    /* Fixed rendering framework prevents layout collapse chains during keyboard switches */
+    #inkwell-ide-canvas {
+      width: 100%;
+      height: 450px;     
+      position: relative;
+    }
+
+    .editor-offline-notice {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      color: #475569; font-family: monospace; font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.15em; font-weight: bold; text-align: center; padding: 2rem;
+    }
+
+    /* MATRIX THEME MODE OVERRIDES FOR GRAPHICS INTERFACES */
+    .sandbox-active .matrix-target-panel {
+      background-color: var(--matrix-bg) !important;
+      border-color: var(--matrix-border) !important;
+    }
+    .sandbox-active .editor-canvas-container {
+      border-color: var(--matrix-border) !important;
+    }
+    .sandbox-active .targeting-command-deck {
+      border-color: var(--matrix-border) !important;
+    }
+    .sandbox-active .scope-control-grid {
+      border-left-color: var(--matrix-border) !important;
+      border-right-color: var(--matrix-border) !important;
+    }
+    .sandbox-active .workspace-utility-bar {
+      border-left-color: var(--matrix-border) !important;
+      border-right-color: var(--matrix-border) !important;
+      border-bottom-color: var(--matrix-border) !important;
+    }
+
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem; }
+    .stack-grid { display: flex; flex-direction: column; gap: 1rem; }
+
+    button.action-btn {
+      width: 100%;
+      height: 38px;
+      background-color: #111827;
+      border: 2px solid #64748b;
+      color: #ffffff;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0 0.65rem;
+      border-radius: 4px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    button.action-btn:hover { border-color: #ffffff; background-color: #1f2937; }
+    
+    button.scope-btn {
+      height: 36px;
+      background-color: #0f172a;
+      border: 1px solid #475569;
+      color: #ffffff;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 0 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .targeting-command-deck {
+      background-color: #000000;
+      border: 2px solid #475569;
+      border-radius: 4px 4px 0 0;
+      padding: 0.65rem 0.85rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    .deck-status-readout { font-size: 13px; color: #ffffff !important; font-weight: 800; font-family: monospace; }
+    .deck-navigator-controls { display: inline-flex; align-items: center; gap: 0.4rem; }
+    .deck-nav-btn { background-color: #1e293b; border: 1px solid #64748b; color: #ffffff !important; font-size: 12px; font-weight: 900; padding: 4px 10px; border-radius: 3px; cursor: pointer; }
+
+    .scope-control-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.5rem;
+      background: #090d16;
+      padding: 0.6rem;
+      border-left: 2px solid var(--border);
+      border-right: 2px solid var(--border);
+    }
+
+    button.commit-btn {
+      width: 100%;
+      height: 44px;
+      background-color: var(--crimson);
+      border: none;
+      color: #ffffff;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button.commit-btn.locked {
+      background-color: #334155 !important;
+      color: #94a3b8 !important;
+      border: 2px dashed #475569 !important;
+      cursor: not-allowed;
+    }
+
+    .toggle-wrapper {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #060b13;
+      border: 2px dashed var(--border);
+      padding: 0.75rem;
+      border-radius: 4px;
+      margin-bottom: 0.5rem;
+    }
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 60px;
+      height: 30px;
+    }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #334155;
+      transition: .3s;
+      border-radius: 34px;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 22px; width: 22px;
+      left: 4px; bottom: 4px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+    }
+    input:checked + .slider { background-color: var(--matrix-border); }
+    input:checked + .slider:before { transform: translateX(30px); background-color: var(--matrix-glow); }
+
+    pre { background-color: #050810; border: 2px solid var(--border); padding: 0.75rem; font-family: monospace; font-size: 11px; color: #a1a1aa; overflow-x: auto; border-radius: 4px; }
+    
+    .sandbox-overlay {
+      position: fixed;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      background-color: #ffffff;
+      z-index: 99999;
+      display: flex;
+      flex-direction: column;
+    }
+    .sandbox-iframe-viewport { flex: 1; width: 100%; height: 100%; border: none; background-color: #ffffff; }
+    .sandbox-return-anchor {
+      position: fixed; bottom: 20px; right: 20px;
+      background-color: #1e293b; color: #ffffff; border: 2px solid #64748b;
+      padding: 0.75rem 1.25rem; font-size: 11px; font-weight: 800; letter-spacing: 0.05em;
+      text-transform: uppercase; border-radius: 50px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      cursor: pointer; z-index: 100000; display: inline-flex; align-items: center; gap: 0.5rem;
+    }
+    .sandbox-return-anchor:hover { background-color: var(--crimson); border-color: #f87171; }
+
+    .placeholder-view { min-height: 300px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 2rem; }
+    footer { background-color: var(--panel); border-top: 2px solid var(--border); padding: 1rem; font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; display: flex; justify-content: space-between; }
+
+    .workspace-utility-bar {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      background-color: #0b1329;
+      padding: 0.6rem 0.8rem;
+      border-left: 2px solid var(--border);
+      border-right: 2px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      user-select: none;
+    }
+
+    .pencil-dropdown-wrapper {
+      position: relative;
+      display: inline-block;
+      margin-right: 24px;
+    }
+
+    .pencil-trigger-btn {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2px;
+    }
+
+    .pencil-icon-svg { width: 14px; height: 14px; fill: #ffffff; }
+
+    .acode-dropdown-menu {
+      display: none;
+      position: absolute;
+      top: 100%; right: 0; margin-top: 6px;
+      background-color: var(--panel); border: 2px solid var(--border); border-radius: 4px;
+      list-style: none; padding: 4px 0; min-width: 120px; z-index: 1000;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    }
+    .acode-dropdown-menu.visible { display: block; }
+    .acode-dropdown-menu li { padding: 8px 14px; font-size: 11px; font-weight: bold; text-transform: uppercase; color: var(--text); cursor: pointer; text-align: left; }
+    .acode-dropdown-menu li:hover { background-color: var(--border); color: #ffffff; }
+
+    .utility-text-link { font-size: 10px; cursor: pointer; font-weight: bold; text-transform: uppercase; }
+  </style>
+</head>
+<body>
+
+  <header id="main-header">
+    <div class="brand-sub">Modular Environment</div>
+    <div class="brand-title">THE INKWELL CONTROL PLATFORM</div>
+    <nav>
+      <button onclick="switchModule('core-engine')" id="nav-core-engine" class="active">Core System Matrix</button>
+      <button onclick="switchModule('video-editor')" id="nav-video-editor">Video Processor</button>
+      <button onclick="switchModule('logo-maker')" id="nav-logo-maker">Canvas Forge</button>
+    </nav>
+  </header>
+
+  <main>
+    <div id="module-core-engine" class="workspace-panel">
+      
+      <section id="pipeline-config-section">
+        <h2>GitHub Pipeline Link</h2>
+        <div class="stack-grid">
+          <div>
+            <label for="gh-pat">GitHub Password Token (PAT)</label>
+            <div style="display: flex; gap: 0.5rem; width: 100%;">
+              <input id="gh-pat" type="password" placeholder="Paste GitHub Token here..." style="flex: 1;" />
+              <button id="token-toggle-btn" class="action-btn" style="width: auto; padding: 0 0.85rem; border-color: var(--border);">👁️</button>
+            </div>
+          </div>
+          <div class="form-grid">
+            <div>
+              <label for="gh-username">Account Username</label>
+              <input id="gh-username" type="text" placeholder="Username" />
+            </div>
+            <div>
+              <label for="gh-repo">Repository Name</label>
+              <input id="gh-repo" type="text" placeholder="Repo Name" />
+            </div>
+          </div>
+          <div class="form-grid" style="margin-bottom: 0;">
+            <button id="gh-connect-btn" class="action-btn" style="border-color: #22c55e;">Connect to GitHub</button>
+            <button id="gh-clear-btn" class="action-btn" style="border-color: #ef4444;">Disconnect / Clear Settings</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="matrix-target-panel">
+        <h2>File Editor Terminal</h2>
+        <div class="stack-grid">
+          
+          <div style="background-color: #050810; border: 2px solid var(--border); padding: 0.6rem 0.75rem; border-radius: 4px; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 1rem;">
+            <div style="overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+              <label style="margin-bottom: 0; font-size: 9px;">Connection Status</label>
+              <span id="workflow-name" style="font-size: 10px; font-family: monospace; color: var(--text-muted); display: block; overflow: hidden; text-overflow: ellipsis;">Waiting to connect to GitHub...</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; justify-self: end; min-width: 85px;">
+              <div id="status-indicator-light" style="width: 11px; height: 11px; background-color: #475569; border-radius: 50%; flex-shrink: 0;"></div>
+              <span id="workflow-status-text" style="font-size: 10px; font-weight: bold; text-transform: uppercase; color: #64748b;">Offline</span>
+            </div>
+          </div>
+
+          <div class="stack-grid" style="gap: 0.75rem;">
+            <div>
+              <label for="gh-file-dropdown">Choose File to Open</label>
+              <select id="gh-file-dropdown" class="padded-dropdown">
+                <option value="">-- Choose Target Repo File --</option>
+              </select>
+              <input id="gh-file-path" type="hidden" value="index.html" />
+            </div>
+            
+            <div>
+              <label for="snippet-search">Sniper Search™</label>
+              <div style="display: flex; gap: 0.5rem; width: 100%;">
+                <input id="snippet-search" type="text" placeholder="Type a keyword to isolate a line..." style="flex: 1;" />
+                <button id="snippet-find-btn" class="action-btn" style="width: auto; padding: 0 1.25rem; border-color: var(--gold); font-weight: 800;">Find</button>
+              </div>
+            </div>
+          </div>
+
+          <div style="background-color: #060b13; border: 2px solid #1e293b; padding: 0.85rem; border-radius: 4px;">
+            <label style="color: #60a5fa; margin-bottom: 0.5rem; font-size: 9px; font-weight: 800; letter-spacing: 0.1em;">Sticky Saved Codes</label>
+            <button id="stage-snippet-btn" class="action-btn" style="border-color: #3b82f6; background: rgba(59,130,246,0.1); margin-bottom: 0.75rem; padding: 0.6rem; font-weight: 800; height: 38px;">Save Current Changes to Sticky Queue</button>
+            <div style="display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 0.5rem; align-items: start;">
+              <div>
+                <select id="sticky-dropdown" style="border-color: #3b82f6; padding: 0.45rem 0.6rem; font-size: 12px;">
+                  <option value="">-- No Sticky Codes Saved --</option>
+                </select>
+              </div>
+              <button id="cancel-changes-btn" class="action-btn" style="border-color: #475569; padding: 0.45rem; font-size: 9px;">Reset File</button>
+            </div>
+          </div>
+
+          <div>
+            <label for="gh-commit-message">Save Note (Commit Message)</label>
+            <input id="gh-commit-message" type="text" placeholder="Describe your updates here..." value="Updates via Mobile Console" />
+          </div>
+
+          <div>
+            <div class="toggle-wrapper">
+              <div>
+                <label style="color: var(--matrix-glow); font-size: 10px; font-weight: 900; margin-bottom: 0;">🛠️ SANDBOX SAFETECH MODE</label>
+                <span id="sandbox-safety-note" style="font-size: 8px; color: #64748b; font-family: monospace; display:block;">STATUS: LIVE DISPATCH ARM ACTIVE</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="sandbox-safety-toggle">
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <label style="color: var(--gold); margin-bottom: 0.4rem;">Live Code Workspace</label>
+            
+            <div class="targeting-command-deck">
+              <div id="deck-readout" class="deck-status-readout">Viewing: Entire File Mode</div>
+              <div id="match-navigator-wrap" class="deck-navigator-controls" style="display: none;">
+                <span id="match-counter-text" style="font-size: 11px; color: #a3a3a3; font-weight: bold; font-family: monospace;">[ 0 of 0 Matches ]</span>
+                <button id="match-prev-btn" class="deck-nav-btn">◀ PREV</button>
+                <button id="match-next-btn" class="deck-nav-btn">NEXT ▶</button>
+              </div>
+            </div>
+
+            <div class="scope-control-grid">
+              <div style="margin-top: 0.2rem; padding-top: 0.2rem; width: 100%;">
+                <button id="char-grow-btn" class="scope-btn" style="width: 100%; height: 42px; border-color: #10b981; background-color: rgba(16,185,129,0.08); font-weight: 900; font-size: 13px; letter-spacing: 0.08em; color: #ffffff;">SMART HEAL™</button>
+              </div>
+            </div>
+
+            <div class="workspace-utility-bar">
+              <div class="pencil-dropdown-wrapper">
+                <button id="pencil-menu-trigger" class="pencil-trigger-btn" aria-label="Text Actions">
+                  <svg class="pencil-icon-svg" viewBox="0 0 24 24">
+                    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                  </svg>
+                </button>
+                <ul id="acode-pencil-menu" class="acode-dropdown-menu">
+                  <li data-edit-action="cut">Cut</li>
+                  <li data-edit-action="paste">Paste</li>
+                  <li data-edit-action="copy">Copy</li>
+                  <li data-edit-action="selectall">Select All</li>
+                </ul>
+              </div>
+
+              <span id="wrap-toggle-btn" class="utility-text-link" style="color: #d97706;">Word Wrap</span>
+            </div>
+
+            <div class="editor-canvas-container">
+              <div id="inkwell-ide-canvas">
+                <div id="editor-offline-fallback" class="editor-offline-notice">
+                  [ System Core Active // Awaiting Editor Plugin Attachment ]
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label>System Activity Log</label>
+            <pre id="gh-debug-output">Console pipeline standing by...</pre>
+          </div>
+          
+          <button id="gh-upload-btn" class="commit-btn">Publish All Changes Live to GitHub</button>
+        </div>
+      </section>
+    </div>
+
+    <div id="module-video-editor" class="workspace-panel hidden">
+      <section class="placeholder-view"><div style="font-size: 2rem;">🎬</div><h3>AUTOMATED VIDEO PROCESSOR STUDIO</h3></section>
+    </div>
+    <div id="module-logo-maker" class="workspace-panel hidden">
+      <section class="placeholder-view"><div style="font-size: 2rem;">📐</div><h3>LOGO &amp; BLUEPRINT GRAPHIC FORGE</h3></section>
+    </div>
+  </main>
+
+  <div id="sandbox-overlay-container" class="sandbox-overlay hidden">
+    <button id="sandbox-close-btn" class="sandbox-return-anchor">◀ Back to Editor</button>
+    <iframe id="sandbox-iframe" class="sandbox-iframe-viewport" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+  </div>
+
+  <footer>
+    <div>Host Console</div>
+    <div>The Inkwell Repository © 2026</div>
+  </footer>
+
+  <script>
+    // =========================================================================
+    // GLOBAL PLUGGABLE EDITOR REGISTRY (THE LAW)
+    // =========================================================================
+    const InkwellEditorPlugin = {
+      instance: null,
+      capabilities: {
+        getText: function() { return ""; },
+        setText: function(text) { logDebug("Plugin API: Write command ignored. No editor attached."); },
+        getCursorIndex: function() { return 0; },
+        setCursorIndex: function(index) { },
+        setMode: function(languageMode) { },
+        setWordWrap: function(bool) { },
+        getWordWrap: function() { return false; },
+        setTheme: function(themeName) { },
+        executeClipboardAction: function(action) { logDebug(`Plugin API: '${action}' action ignored. No editor attached.`); }
+      }
+    };
+
+    function logDebug(message) {
+      const output = document.getElementById("gh-debug-output");
+      if (output) {
+        output.textContent = message + "\n" + output.textContent;
+      }
+    }
+
+    function switchModule(moduleId) {
+      document.querySelectorAll('.workspace-panel').forEach(p => p.classList.add('hidden'));
+      document.getElementById(`module-${moduleId}`).classList.remove('hidden');
+      document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+      document.getElementById(`nav-${moduleId}`).classList.add('active');
+    }
+
+    function setText(el, text) { if (el) el.textContent = text || ""; }
+    function base64EncodeUnicode(str) { return btoa(unescape(encodeURIComponent(str))); }
+    function base64DecodeUnicode(str) { return decodeURIComponent(escape(atob(str))); }
+
+    const GitHubEngine = (function () {
+      let state = { token: "", username: "", repo: "" };
+      let cachedFullFileRaw = ""; 
+      let targetSnippetKeyword = "";
+      let matchedIndicesArray = [];  
+      let activeMatchPointer = 0;    
+      let stickyQueue = []; 
+      
+      let liveAnchoredMemory = "";
+      let isSandboxSafetyModeOn = false;
+
+      const els = {};
+
+      function cache() {
+        els.pat = document.getElementById("gh-pat"); els.username = document.getElementById("gh-username"); els.repo = document.getElementById("gh-repo");
+        els.connectBtn = document.getElementById("gh-connect-btn"); els.clearBtn = document.getElementById("gh-clear-btn");
+        els.tokenToggle = document.getElementById("token-toggle-btn"); els.dropdown = document.getElementById("gh-file-dropdown");
+        els.uploadBtn = document.getElementById("gh-upload-btn"); els.filePathHidden = document.getElementById("gh-file-path"); els.commitMessage = document.getElementById("gh-commit-message");
+        els.debugOutput = document.getElementById("gh-debug-output");
+        els.searchField = document.getElementById("snippet-search"); els.findBtn = document.getElementById("snippet-find-btn");
+        els.light = document.getElementById("status-indicator-light"); els.lightText = document.getElementById("workflow-status-text"); els.lightLabel = document.getElementById("workflow-name");
+        els.stickyDropdown = document.getElementById("sticky-dropdown"); els.stageBtn = document.getElementById("stage-snippet-btn");
+        els.cancelChangesBtn = document.getElementById("cancel-changes-btn");
+        els.charGrowCursor = document.getElementById("char-grow-btn"); 
+        
+        els.deckReadout = document.getElementById("deck-readout"); els.matchNavWrap = document.getElementById("match-navigator-wrap");
+        els.matchCounterText = document.getElementById("match-counter-text"); els.matchPrev = document.getElementById("match-prev-btn"); els.matchNext = document.getElementById("match-next-btn");
+        
+        els.safetyToggle = document.getElementById("sandbox-safety-toggle");
+        els.safetyNote = document.getElementById("sandbox-safety-note");
+        els.pipelineSection = document.getElementById("pipeline-config-section");
+        els.mainHeader = document.getElementById("main-header");
+        els.wrapToggleBtn = document.getElementById("wrap-toggle-btn");
+
+        els.pencilTrigger = document.getElementById("pencil-menu-trigger");
+        els.pencilMenu = document.getElementById("acode-pencil-menu");
+        els.fallbackNotice = document.getElementById("editor-offline-fallback");
+      }
+
+      function updateActiveValue(newTextString, languageMode = "html") {
+        let cleanMode = "html";
+        if (languageMode.endsWith('.css')) cleanMode = "css";
+        if (languageMode.endsWith('.js')) cleanMode = "javascript";
+        
+        InkwellEditorPlugin.capabilities.setMode(cleanMode);
+        InkwellEditorPlugin.capabilities.setText(newTextString);
+      }
+
+      function handleSafetyToggleAction() {
+        isSandboxSafetyModeOn = els.safetyToggle.checked;
+        
+        if (isSandboxSafetyModeOn) {
+          liveAnchoredMemory = InkwellEditorPlugin.capabilities.getText();
+          document.body.classList.add("sandbox-active");
+          
+          els.safetyNote.textContent = "STATUS: EXPERIMENTAL STAGING BUFFER LOCKED";
+          els.safetyNote.style.color = "var(--matrix-glow)";
+          
+          els.pipelineSection.classList.add("dimmed-safety");
+          els.mainHeader.classList.add("dimmed-safety");
+          
+          els.uploadBtn.classList.add("locked");
+          els.uploadBtn.disabled = true;
+          els.uploadBtn.textContent = "[ LOCKED: SAFETY STAGING MODE ACTIVE ]";
+          
+          InkwellEditorPlugin.capabilities.setTheme("terminal");
+        } else {
+          document.body.classList.remove("sandbox-active");
+          InkwellEditorPlugin.capabilities.setText(liveAnchoredMemory);
+          
+          els.safetyNote.textContent = "STATUS: LIVE DISPATCH ARM ACTIVE";
+          els.safetyNote.style.color = "#64748b";
+          
+          els.pipelineSection.classList.remove("dimmed-safety");
+          els.mainHeader.classList.remove("dimmed-safety");
+          
+          els.uploadBtn.classList.remove("locked");
+          els.uploadBtn.disabled = false;
+          els.uploadBtn.textContent = "Publish All Changes Live to GitHub";
+          
+          InkwellEditorPlugin.capabilities.setTheme("twilight");
+        }
+      }
+
+      function init() {
+        cache();
+        loadSavedCredentials();
+
+        if (els.safetyToggle) els.safetyToggle.addEventListener("change", handleSafetyToggleAction);
+        
+        if (els.pencilTrigger && els.pencilMenu) {
+          els.pencilTrigger.addEventListener("click", (e) => {
+            e.stopPropagation();
+            els.pencilMenu.classList.toggle("visible");
+          });
+
+          document.addEventListener("click", (e) => {
+            if (!els.pencilMenu.contains(e.target) && e.target !== els.pencilTrigger) {
+              els.pencilMenu.classList.remove("visible");
+            }
+          });
+
+          els.pencilMenu.addEventListener("click", (e) => {
+            const contextAction = e.target.getAttribute("data-edit-action");
+            if (!contextAction) return;
+            InkwellEditorPlugin.capabilities.executeClipboardAction(contextAction);
+            els.pencilMenu.classList.remove("visible");
+          });
+        }
+
+        if (els.wrapToggleBtn) {
+          els.wrapToggleBtn.addEventListener("click", () => {
+            let isCurrentlyWrapped = InkwellEditorPlugin.capabilities.getWordWrap();
+            InkwellEditorPlugin.capabilities.setWordWrap(!isCurrentlyWrapped);
+          });
+        }
+
+        if (els.connectBtn) els.connectBtn.addEventListener("click", handleConnect);
+        if (els.clearBtn) els.clearBtn.addEventListener("click", handleClearMemory);
+        if (els.uploadBtn) els.uploadBtn.addEventListener("click", handleUpload);
+        if (els.tokenToggle) els.tokenToggle.addEventListener("click", toggleTokenPrivacy);
+        if (els.dropdown) els.dropdown.addEventListener("change", handleFileSelection);
+        if (els.findBtn) els.findBtn.addEventListener("click", targetAndIsolateSnippet);
+        if (els.stageBtn) els.stageBtn.addEventListener("click", stageCurrentSnippet);
+        if (els.stickyDropdown) els.stickyDropdown.addEventListener("change", handleStickySelectionAction);
+        if (els.cancelChangesBtn) els.cancelChangesBtn.addEventListener("click", resetStagingQueueDefaults);
+
+        if (els.username) els.username.addEventListener("input", () => localStorage.setItem("inkwell_owner", els.username.value.trim()));
+        if (els.repo) els.repo.addEventListener("input", () => localStorage.setItem("inkwell_repo", els.repo.value.trim()));
+        if (els.commitMessage) els.commitMessage.addEventListener("input", () => localStorage.setItem("inkwell_commit_msg", els.commitMessage.value));
+
+        if (els.charGrowCursor) els.charGrowCursor.addEventListener("click", triggerSurgicalCharacterReveal);
+
+        if (els.matchPrev) els.matchPrev.addEventListener("click", () => navigateMatchSelection(-1));
+        if (els.matchNext) els.matchNext.addEventListener("click", () => navigateMatchSelection(1));
+      }
+
+      function loadSavedCredentials() {
+        const savedToken = localStorage.getItem("inkwell_pat");
+        const savedOwner = localStorage.getItem("inkwell_owner");
+        const savedRepo = localStorage.getItem("inkwell_repo");
+        const savedMsg = localStorage.getItem("inkwell_commit_msg");
+        if (savedToken) els.pat.value = savedToken;
+        if (savedOwner) els.username.value = savedOwner;
+        if (savedRepo) els.repo.value = savedRepo;
+        if (savedMsg) els.commitMessage.value = savedMsg;
+        setLightState(false);
+      }
+
+      function setLightState(online, details = "") {
+        if (online) {
+          els.light.style.backgroundColor = "#22c55e";
+          els.lightText.textContent = "Connected";
+          els.lightText.style.color = "#22c55e";
+          els.lightLabel.textContent = details || "Pipeline linked successfully.";
+        } else {
+          els.light.style.backgroundColor = "#475569";
+          els.lightText.textContent = "Offline";
+          els.lightText.style.color = "#64748b";
+          els.lightLabel.textContent = details || "Pipeline offline.";
+        }
+      }
+
+      function toggleTokenPrivacy() {
+        els.pat.type = els.pat.type === "password" ? "text" : "password";
+        els.tokenToggle.textContent = els.pat.type === "password" ? "👁️" : "🔒";
+      }
+
+      function handleClearMemory() {
+        localStorage.clear();
+        if(els.pat) els.pat.value = "";
+        if(els.username) els.username.value = "";
+        if(els.repo) els.repo.value = "";
+        els.dropdown.innerHTML = '<option value="">-- Choose Target Repo File --</option>';
+        resetStagingQueueDefaults();
+        setLightState(false);
+      }
+
+      function read() {
+        state.token = els.pat?.value.trim() || "";
+        state.username = els.username?.value.trim() || "";
+        state.repo = els.repo?.value.trim() || "";
+      }
+
+      async function handleConnect() {
+        read();
+        if (!state.token || !state.username || !state.repo) return alert("Missing required fields.");
+        try {
+          const files = await fetchFiles();
+          const cleanFiles = files.filter(f => f.type === "file");
+          els.dropdown.innerHTML = '<option value="">-- Choose Target Repo File --</option>' + cleanFiles.map(f => `<option value="${f.path}">${f.name}</option>`).join('');
+          setLightState(true, `${state.username} // ${state.repo}`);
+        } catch (err) { setLightState(false); }
+      }
+
+      async function fetchFiles() {
+        const url = `https://api.github.com/repos/${encodeURIComponent(state.username)}/${encodeURIComponent(state.repo)}/contents/`;
+        const res = await fetch(url, { method: "GET", headers: { "Authorization": "Bearer " + state.token } });
+        return await res.json();
+      }
+
+      async function handleFileSelection() {
+        read();
+        const path = els.dropdown.value;
+        if (!path) return;
+        els.filePathHidden.value = path;
+        resetStagingQueueDefaults();
+        try {
+          const url = `https://api.github.com/repos/${encodeURIComponent(state.username)}/${encodeURIComponent(state.repo)}/contents/${encodeURIComponent(path)}`;
+          const res = await fetch(url, { method: "GET", headers: { "Authorization": "Bearer " + state.token } });
+          const data = await res.json();
+          cachedFullFileRaw = base64DecodeUnicode(data.content);
+          
+          if (els.fallbackNotice) els.fallbackNotice.style.display = "none";
+          updateActiveValue(cachedFullFileRaw, path);
+          hideNavigatorUI();
+        } catch (err) { }
+      }
+
+      function targetAndIsolateSnippet() {
+        if (!InkwellEditorPlugin.instance) { logDebug("Sniper Search: Halted. No editor plugin attached."); return; }
+        const keyword = els.searchField.value.trim();
+        if (!keyword || !cachedFullFileRaw) return;
+        const lines = cachedFullFileRaw.split('\n');
+        matchedIndicesArray = [];
+        for (let i = 0; i < lines.length; i++) {
+          if (lines[i].toLowerCase().includes(keyword.toLowerCase())) matchedIndicesArray.push(i);
+        }
+        if (matchedIndicesArray.length === 0) return hideNavigatorUI();
+        targetSnippetKeyword = keyword;
+        activeMatchPointer = 0;
+        els.matchNavWrap.style.display = "inline-flex";
+        updateMatchCounterTextUI();
+        renderIsolatedScopeView();
+      }
+
+      function navigateMatchSelection(direction) {
+        if (matchedIndicesArray.length === 0) return;
+        activeMatchPointer = (activeMatchPointer + direction + matchedIndicesArray.length) % matchedIndicesArray.length;
+        updateMatchCounterTextUI();
+        renderIsolatedScopeView();
+      }
+
+      function updateMatchCounterTextUI() {
+        setText(els.matchCounterText, `[ Match ${activeMatchPointer + 1} of ${matchedIndicesArray.length} ]`);
+      }
+
+      function hideNavigatorUI() { if (els.matchNavWrap) els.matchNavWrap.style.display = "none"; }
+
+      function renderIsolatedScopeView() {
+        if (matchedIndicesArray.length === 0 || !cachedFullFileRaw) return;
+        const lines = cachedFullFileRaw.split('\n');
+        const targetLineIndex = matchedIndicesArray[activeMatchPointer];
+        
+        InkwellEditorPlugin.capabilities.setText(lines.join('\n'));
+        els.deckReadout.textContent = `Sniper Search™: Line ${targetLineIndex + 1}`;
+      }
+
+      function triggerSurgicalCharacterReveal() {
+        if (!InkwellEditorPlugin.instance) { logDebug("Smart Heal: Halted. No editor plugin attached."); return; }
+        if (!cachedFullFileRaw) return alert("Please open a file first.");
+
+        const startPos = InkwellEditorPlugin.capabilities.getCursorIndex();
+        const currentContent = InkwellEditorPlugin.capabilities.getText();
+
+        let currentMasterTargetSnippet = cachedFullFileRaw;
+        if (matchedIndicesArray.length > 0) {
+          const lines = cachedFullFileRaw.split('\n');
+          currentMasterTargetSnippet = lines.join('\n');
+        }
+
+        if (startPos >= currentMasterTargetSnippet.length) return;
+
+        const correctMasterChar = currentMasterTargetSnippet.charAt(startPos);
+        const localWorkspaceChar = currentContent.charAt(startPos);
+
+        if (currentContent.length < currentMasterTargetSnippet.length) {
+          InkwellEditorPlugin.capabilities.setText(currentContent.substring(0, startPos) + correctMasterChar + currentContent.substring(startPos));
+        } else {
+          if (correctMasterChar !== localWorkspaceChar) {
+            InkwellEditorPlugin.capabilities.setText(currentContent.substring(0, startPos) + correctMasterChar + currentContent.substring(startPos + 1));
+          }
+        }
+        
+        InkwellEditorPlugin.capabilities.setCursorIndex(startPos + 1);
+      }
+
+      function stageCurrentSnippet() {
+        if (!InkwellEditorPlugin.instance) { logDebug("Queue: Halted. No editor plugin attached."); return; }
+        if (matchedIndicesArray.length === 0) return;
+        const currentEditedText = InkwellEditorPlugin.capabilities.getText();
+        const lines = cachedFullFileRaw.split('\n');
+        const targetLineIndex = matchedIndicesArray[activeMatchPointer];
+        const originalSnippetText = lines.join('\n');
+        const stagingKey = `${targetSnippetKeyword} (Line ${targetLineIndex + 1})`;
+        
+        const existingIndex = stickyQueue.findIndex(item => item.keyHandle === stagingKey);
+        if (existingIndex !== -1) stickyQueue[existingIndex].edited = currentEditedText;
+        else stickyQueue.push({ keyHandle: stagingKey, keyword: targetSnippetKeyword, original: originalSnippetText, edited: currentEditedText });
+        
+        updateStickyDropdownUI();
+        clearWorkspaceFields();
+      }
+
+      function handleStickySelectionAction() {
+        const val = els.stickyDropdown.value;
+        if (!val) return;
+        if (val.startsWith("REMOVE:")) {
+          stickyQueue = stickyQueue.filter(item => item.keyHandle !== val.replace("REMOVE:", ""));
+          updateStickyDropdownUI();
+          clearWorkspaceFields();
+        } else {
+          const item = stickyQueue.find(i => i.value === val || i.keyHandle === val);
+          if (!item) return;
+          targetSnippetKeyword = item.keyword;
+          InkwellEditorPlugin.capabilities.setText(item.edited);
+          els.searchField.value = item.keyword;
+          hideNavigatorUI();
+        }
+      }
+
+      function updateStickyDropdownUI() {
+        if (stickyQueue.length === 0) { els.stickyDropdown.innerHTML = '<option value="">-- No Sticky Codes Saved --</option>'; return; }
+        let opts = `<option value="">-- View Staged Sticky Queue (${stickyQueue.length}) --</option>`;
+        stickyQueue.forEach(i => { opts += `<option value="${i.keyHandle}">🔑 [Saved] ${i.keyHandle}</option>`; });
+        opts += `<option value="" disabled>───────────────────</option>`;
+        stickyQueue.forEach(i => { opts += `<option value="REMOVE:${i.keyHandle}">❌ [Delete] ${i.keyHandle}</option>`; });
+        els.stickyDropdown.innerHTML = opts;
+      }
+
+      function clearWorkspaceFields() {
+        InkwellEditorPlugin.capabilities.setText(""); 
+        els.searchField.value = ""; targetSnippetKeyword = "";
+        matchedIndicesArray = []; activeMatchPointer = 0;
+        hideNavigatorUI();
+        els.deckReadout.textContent = "Viewing: Entire File Mode";
+      }
+
+      function resetStagingQueueDefaults() {
+        stickyQueue = []; updateStickyDropdownUI(); clearWorkspaceFields();
+        if (cachedFullFileRaw) InkwellEditorPlugin.capabilities.setText(cachedFullFileRaw);
+      }
+
+      async function handleUpload() {
+        read();
+        const path = els.filePathHidden.value;
+        if (!path) return;
+
+        // Mobile safety confirmation gate (Tweak text to clean question)
+        const confirmDeploy = confirm("Are you sure you want to publish?");
+        if (!confirmDeploy) {
+          logDebug("Deploy canceled by user safety gate.");
+          return;
+        }
+
+        let finalDocumentContent = cachedFullFileRaw;
+        if (stickyQueue.length > 0) {
+          for (const item of stickyQueue) {
+            if (finalDocumentContent.includes(item.original)) finalDocumentContent = finalDocumentContent.replace(item.original, item.edited);
+          }
+        } else { finalDocumentContent = InkwellEditorPlugin.capabilities.getText(); }
+        try {
+          const shaUrl = `https://api.github.com/repos/${encodeURIComponent(state.username)}/${encodeURIComponent(state.repo)}/contents/${encodeURIComponent(path)}`;
+          const shaRes = await fetch(shaUrl, { method: "GET", headers: { "Authorization": "Bearer " + state.token } });
+          const shaData = await shaRes.json();
+          const body = { message: els.commitMessage.value.trim(), content: base64EncodeUnicode(finalDocumentContent) };
+          if (shaData?.sha) body.sha = shaData.sha;
+          const res = await fetch(shaUrl, { method: "PUT", headers: { "Authorization": "Bearer " + state.token, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+          if (res.ok) { resetStagingQueueDefaults(); alert("All changes successfully published live!"); }
+        } catch (err) { }
+      }
+
+      return { init };
+    })();
+
+    const SandboxEngine = (function () {
+      const els = {};
+      function init() {
+        els.frame = document.getElementById("sandbox-iframe");
+        els.overlay = document.getElementById("sandbox-overlay-container");
+        els.closeBtn = document.getElementById("sandbox-close-btn");
+
+        if (els.closeBtn) {
+          els.closeBtn.addEventListener("click", () => {
+            els.overlay.classList.add("hidden");
+            els.frame.srcdoc = "";
+          });
+        }
+      }
+      return { init };
+    })();
+
+    document.addEventListener("DOMContentLoaded", () => { GitHubEngine.init(); SandboxEngine.init(); });
+  </script>
+</body>
+</html>
